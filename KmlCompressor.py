@@ -4,7 +4,7 @@ import optparse
 import os
 import shutil
 
-from PythonKML import PythonKML as pykml
+from xml.dom import minidom
 
 usage = "usage: %prog [options] source"
 
@@ -14,48 +14,87 @@ parser.add_option("-n", "--number", dest="number", type="int", default="950", he
 parser.add_option("-a", "--angle", dest="angle", type="float", default=30, help="maximum angle in degrees for a datapoint to be removed")
 parser.add_option("-f", "--force", dest="force", action="store_true", help="overwrite existing destination files")
 
-def extractLineStrings(geometries):
+def extractCoordinates(geometryNode):
+    coordinateNode = geometryNode.getElementsByTagName("coordinates")[0]
+    coordStr = coordinateNode.firstChild.data
+    return coordStr.split()
+
+def extractPoint(point):
+    return (1, [])
+
+def extractLineString(linestring):
+    return (0, [linestring])
+
+def extractLinearRing(ring):
+    coordData = extractCoordinates(ring)
+    return (len(coordData), [])
+    
+# Both Polygon and MultiGeometry are simply containers for these basic geometry
+# types so will be ignored by the compression algorithm.
+GEOMETRIES = { "Point":extractPoint,
+               "LineString":extractLineString,
+               "LinearRing":extractLinearRing }
+
+def extractGeometries(pm):
     count = 0
     tocompress = []
 
-    for geo in geometries:
-        if type(geo) == pykml.Point:
-            count += 1
-        elif type(geo) == pykml.LineString:
-            tocompress.append(geo)
-        elif type(geo) == pykml.LinearRing:
-            count += len(geo.Coordinates)
-        elif type(geo) == pykml.MultiGeometry:
-            (c2, comp2) = extractLineStrings(geo._geoms)
-            count += c2
-            tocompress.extend(comp2)
-        else:
-            print "Did not recognize geometry type"
+    for (geo,action) in GEOMETRIES.items():
+        for aGeo in pm.getElementsByTagName(geo):
+            size, geos = action(aGeo)
+            count += size
+            tocompress.extend(geos)
 
     return (count, tocompress)
 
-def compressCoordinates(coords, limit, angle):
+def extractCompressable(placemarks):
+    count = 0
+    tocompress = []
+
+    for pm in placemarks:
+        size, geos = extractGeometries(pm)
+        count += size
+        tocompress.extend(geos)
+
+    return (count, tocompress)
+
+def compressGeometries(geometries, limit, angle):
     pass
 
-def compress(dest, limit, angle):
-    kml = pykml.kml(dest)
 
-    geometries = [pm.getGeometry() for pm in kml.getPlacemarks()]
+def compress(source, dest, limit, angle):
+    doc = minidom.parse(source)
 
-    (count, tocompress) = extractLineStrings(geometries)
+    placemarks = doc.getElementsByTagName("Placemark")
+
+    size, geometries = extractCompressable(placemarks)
+
+    remainingDP = limit - size
+
     
-    limit -= count
 
-    existing = [len(x.Coordinates) for x in tocompress]
+    destfile = open(dest, 'w')
 
-    total = sum(existing)
+    doc.writexml(destfile)
 
-    counts = [x/total*limit for x in existing]
+#    geometries = [pm.getGeometry() for pm in kml.getPlacemarks()]
+
+#    (count, tocompress) = extractLineStrings(geometries)
     
-    for aCount, geo in zip(counts, tocompress):
-        compressCoordinates(geo.Coordinates, aCount, angle)
+#    limit -= count
+
+ #   existing = [len(x.Coordinates) for x in tocompress]
+
+  #  total = sum(existing)
+
+   # counts = [x/total*limit for x in existing]
+    
+#    for aCount, geo in zip(counts, tocompress):
+#        compressCoordinates(geo.Coordinates, aCount, angle)
         
-    kml.write()
+#    kml.write()
+
+    
 
 if __name__ == "__main__":
     (options, args) = parser.parse_args();
@@ -84,7 +123,5 @@ if __name__ == "__main__":
             print "Destination: %s already exists" % dest
             exit()
 
-    shutil.copy(source, dest)
-
-    compress(dest, limit, angle)
+    compress(source, dest, limit, angle)
 
