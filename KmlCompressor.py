@@ -29,8 +29,13 @@ def extractLineStrings(geometries):
             (c2, comp2) = extractLineStrings(geo._geoms)
             count += c2
             tocompress.extend(comp2)
+        else:
+            print "Did not recognize geometry type"
 
     return (count, tocompress)
+
+def compressCoordinates(coords, limit, angle):
+    pass
 
 def compress(dest, limit, angle):
     kml = pykml.kml(dest)
@@ -38,9 +43,19 @@ def compress(dest, limit, angle):
     geometries = [pm.getGeometry() for pm in kml.getPlacemarks()]
 
     (count, tocompress) = extractLineStrings(geometries)
+    
+    limit -= count
 
-    print count
-    print len(tocompress)
+    existing = [len(x.Coordinates) for x in tocompress]
+
+    total = sum(existing)
+
+    counts = [x/total*limit for x in existing]
+    
+    for aCount, geo in zip(counts, tocompress):
+        compressCoordinates(geo.Coordinates, aCount, angle)
+        
+    kml.write()
 
 if __name__ == "__main__":
     (options, args) = parser.parse_args();
