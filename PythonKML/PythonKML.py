@@ -82,7 +82,7 @@ class altitudeMode(object):
             return theNode.toprettyxml("\t","\n","UTF-8")
         return theNode.toxml("UTF-8")
     
-     def parseKMLNode(self, KMLNode):
+    def parseKMLNode(self, KMLNode):
         tag = None
         try:
             tag = KMLNode.tagName
